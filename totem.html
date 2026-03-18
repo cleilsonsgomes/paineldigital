@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Totem de Senhas - Paulo Afonso</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #003399 0%, #001133 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            padding: 5vh;
+        }
+
+        .totem-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4vh;
+            padding: 6vh;
+            width: 100%;
+            max-width: 900px;
+            text-align: center;
+            box-shadow: 0 4vh 10vh rgba(0,0,0,0.5);
+        }
+
+        .totem-header {
+            margin-bottom: 6vh;
+        }
+
+        .totem-header img {
+            height: 12vh;
+            margin-bottom: 3vh;
+        }
+
+        .totem-header h1 {
+            font-size: 3rem;
+            font-weight: 900;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 0.2rem;
+        }
+
+        .totem-header p {
+            font-size: 1.5rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 1vh;
+        }
+
+        .buttons-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 3vh;
+        }
+
+        .totem-btn {
+            padding: 5vh;
+            border-radius: 3vh;
+            border: none;
+            color: #fff;
+            font-size: 2.5rem;
+            font-weight: 900;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1vh;
+            text-transform: uppercase;
+            box-shadow: 0 1vh 3vh rgba(0,0,0,0.3);
+        }
+
+        .totem-btn span {
+            font-size: 1.2rem;
+            font-weight: 600;
+            opacity: 0.8;
+        }
+
+        .btn-geral { background: linear-gradient(135deg, #2563eb, #1e40af); }
+        .btn-pref { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .btn-ouvidoria { background: linear-gradient(135deg, #10b981, #047857); }
+
+        .totem-btn:active {
+            transform: scale(0.95);
+            filter: brightness(0.8);
+        }
+
+        /* Modal Simulation */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .ticket-paper {
+            background: #fff;
+            color: #333;
+            padding: 5vh;
+            width: 400px;
+            text-align: center;
+            font-family: 'Courier New', Courier, monospace;
+            box-shadow: 0 0 50px rgba(255,255,255,0.2);
+            border-radius: 2px;
+            animation: ticketOut 0.5s ease-out;
+        }
+
+        @keyframes ticketOut {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .ticket-paper h2 { margin-bottom: 2vh; border-bottom: 2px dashed #ccc; padding-bottom: 1vh; }
+        .ticket-number { font-size: 6rem; font-weight: 900; margin: 3vh 0; }
+        .ticket-info { font-size: 1.2rem; border-top: 2px dashed #ccc; padding-top: 2vh; }
+
+        /* Responsividade para Tablets e Celulares (Vertical) */
+        @media (max-width: 900px), (orientation: portrait) {
+            body {
+                padding: 2vh;
+                align-items: flex-start;
+                overflow-y: auto;
+            }
+
+            .totem-card {
+                margin: 2vh 0;
+                padding: 4vh 3vh;
+                border-radius: 3vh;
+            }
+
+            .totem-header h1 {
+                font-size: 2.2rem;
+            }
+
+            .totem-header p {
+                font-size: 1.1rem;
+            }
+
+            .buttons-grid {
+                grid-template-columns: 1fr;
+                gap: 2vh;
+            }
+
+            .totem-btn {
+                padding: 4vh;
+                font-size: 2rem;
+            }
+            
+            .modal .ticket-paper {
+                width: 90%;
+                padding: 3vh;
+            }
+            
+            .modal .ticket-number {
+                font-size: 4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="totem-card">
+        <header class="totem-header">
+            <img src="logo.png" alt="PMPA">
+            <h1>Retirar Senha</h1>
+            <p>Selecione o serviço desejado</p>
+        </header>
+
+        <div class="buttons-grid">
+            <button class="totem-btn btn-geral" onclick="emitTicket('G')">
+                Geral
+                <span>Atendimento Comum</span>
+            </button>
+            <button class="totem-btn btn-pref" onclick="emitTicket('P')">
+                Preferencial
+                <span>Prioridade por Lei</span>
+            </button>
+            <button class="totem-btn btn-ouvidoria" onclick="emitTicket('O')">
+                Ouvidoria
+                <span>Atendimento e Reclamações</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="ticketModal" class="modal">
+        <div class="ticket-paper">
+            <h3>PREFEITURA DE PAULO AFONSO</h3>
+            <p>SISTEMA DE SENHAS DIGITAL</p>
+            <div class="ticket-number" id="issuedNumber">G001</div>
+            <p id="issuedType">ATENDIMENTO GERAL</p>
+            <div class="ticket-info">
+                <span id="issuedDate">17/03/2026 - 22:55</span><br>
+                <span>POR FAVOR AGUARDE SUA CHAMADA</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        const channel = new BroadcastChannel('password_system');
+        let printMode = 'simulate';
+
+        window.onload = async () => {
+            try {
+                const res = await fetch('/api/public-settings').catch(() => null);
+                if (res && res.ok) {
+                    const settings = await res.json();
+                    printMode = settings.print_mode || 'simulate';
+                }
+            } catch(e) {}
+        };
+
+        async function emitTicket(type) {
+            const ticket = await issueTicket(type);
+            
+            if (!ticket) {
+                alert("Erro ao conectar com o servidor. Tente novamente.");
+                return;
+            }
+
+            channel.postMessage({ action: 'TICKET_ISSUED', data: ticket });
+
+            const typeNames = {
+                'G': 'ATENDIMENTO GERAL',
+                'P': 'ATENDIMENTO PREFERENCIAL',
+                'O': 'OUVIDORIA / RECLAMAÇÕES'
+            };
+
+            document.getElementById('issuedNumber').textContent = formatPassword(ticket);
+            document.getElementById('issuedType').textContent = typeNames[type];
+            document.getElementById('issuedDate').textContent = new Date().toLocaleString('pt-BR');
+            
+            const modal = document.getElementById('ticketModal');
+            const paper = modal.querySelector('.ticket-paper');
+            
+            if (printMode === 'network') {
+                paper.innerHTML = `
+                    <i class="fas fa-print" style="font-size: 4rem; color: #003399; margin-bottom: 2rem;"></i>
+                    <h2 style="font-family: 'Inter', sans-serif;">IMPRIMINDO SENHA</h2>
+                    <div style="font-size: 4rem; font-weight: 900; margin: 2rem 0;">${formatPassword(ticket)}</div>
+                    <p style="font-family: 'Inter', sans-serif;">Retire seu ticket na impressora térmica.</p>
+                `;
+            } else {
+                // Restore original paper content if it was changed
+                paper.innerHTML = `
+                    <h3>PREFEITURA DE PAULO AFONSO</h3>
+                    <p>SISTEMA DE SENHAS DIGITAL</p>
+                    <div class="ticket-number">${formatPassword(ticket)}</div>
+                    <p>${typeNames[type]}</p>
+                    <div class="ticket-info">
+                        <span>${new Date().toLocaleString('pt-BR')}</span><br>
+                        <span>POR FAVOR AGUARDE SUA CHAMADA</span>
+                    </div>
+                `;
+            }
+
+            modal.style.display = 'flex';
+
+            // Beep
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                osc.type = 'sine';
+                osc.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.1);
+            } catch(e) {}
+
+            setTimeout(() => {
+                modal.style.opacity = '0';
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                    modal.style.opacity = '1';
+                }, 500);
+            }, 3000);
+        }
+
+        // Listen for resets from Admin
+        channel.onmessage = (event) => {
+            if (event.data.action === 'SYSTEM_RESET') {
+                window.location.reload();
+            }
+        };
+    </script>
+</body>
+</html>

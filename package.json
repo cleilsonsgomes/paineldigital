@@ -1,0 +1,24 @@
+{
+  "name": "painel-digital-paulo-afonso",
+  "version": "1.0.0",
+  "description": "Painel Digital de Senhas Moderno",
+  "main": "index.html",
+  "scripts": {
+    "start": "node server.js",
+    "serve": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "morgan": "^1.10.0"
+  },
+  "keywords": [
+    "painel",
+    "senhas",
+    "digital"
+  ],
+  "author": "Antigravity AI",
+  "license": "MIT"
+}

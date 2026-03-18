@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  painel-digital:
+    build: .
+    container_name: painel-digital-app
+    ports:
+      - "4001:4001"
+    volumes:
+      - ./database.db:/app/database.db
+      - ./uploads:/app/uploads
+    restart: always
+    environment:
+      - TZ=America/Sao_Paulo

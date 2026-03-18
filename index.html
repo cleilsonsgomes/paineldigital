@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Senhas Digital - Paulo Afonso</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div id="videoOverlay" class="video-overlay" style="display: none;">
+        <button id="stopVideoButton" class="stop-video-btn" onclick="videoController.hideVideo()">✕ PARAR VÍDEO</button>
+        <div class="video-frame">
+            <video id="localVideoPlayer" playsinline></video>
+        </div>
+        <div class="video-footer-wrapper">
+            <h3 class="video-footer-title">ÚLTIMAS SENHAS CHAMADAS</h3>
+            <div class="video-footer-pills" id="videoFooterPills">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Audio Unlock Overlay -->
+    <div id="audioUnlockOverlay" class="audio-unlock-overlay" style="display: none;">
+        <div class="unlock-card">
+            <div class="unlock-icon">
+                <i class="fas fa-volume-up"></i>
+            </div>
+            <h2 style="color: #003399; margin-bottom: 1rem;">Som do Painel</h2>
+            <p style="color: #64748b; margin-bottom: 2rem; font-size: 1.2rem;">O navegador solicita um clique para ativar as chamadas de voz.</p>
+            <button class="unlock-btn" onclick="unlockAudio()">▶ INICIAR PAINEL</button>
+        </div>
+    </div>
+
+    <div class="panel-container">
+        <main class="main-display" id="mainDisplay">
+        <div class="display-header">
+            <div class="clock-display">
+                <span id="currentTime">00:00:00</span>
+                <span id="currentDay" class="clock-date">---, -- DE ---</span>
+            </div>
+            <img src="logo.png" alt="PMPA" class="brand-logo">
+        </div>
+        
+        <!-- Top-Right Discrete Audio Control moved to sidebar -->
+
+            <div class="password-label">Senha Atual</div>
+            <div class="password-number" id="currentPassword">---</div>
+            <div class="guiche-info" id="currentGuiche">Guichê --</div>
+        </main>
+        
+        <aside class="sidebar">
+            <h2 style="display: flex; align-items: center; justify-content: space-between;">
+                Chamadas Recentes
+                <div id="audioToggle" onclick="toggleAudio(event)" class="audio-pill enabled" title="Clique para silenciar/ativar">
+                    <i class="fas fa-volume-up"></i>
+                </div>
+            </h2>
+            <ul class="history-list" id="historyList">
+                <!-- Last passwords will appear here -->
+            </ul>
+        </aside>
+    </div>
+
+    <footer class="footer-ticker">
+        <div class="ticker-label">Notícias Paulo Afonso</div>
+        <div class="ticker-content" id="newsTicker">
+            <span class="ticker-item">Carregando últimas notícias da Prefeitura Municipal de Paulo Afonso...</span>
+        </div>
+    </footer>
+
+    <audio id="chime" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+
+    <script src="script.js"></script>
+    <script>
+        // Specific logic for the Display Panel
+        const channel = new BroadcastChannel('password_system');
+        const synth = window.speechSynthesis;
+        let voices = [];
+        let videoWasPlayingBeforeCall = false;
+
+        function loadVoices() {
+            voices = synth.getVoices();
+        }
+
+        // Wait for voices to be loaded
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+        let audioEnabled = localStorage.getItem('audio_enabled') !== 'false';
+        
+        // Auto-enable audio on first user interaction anywhere
+        document.body.addEventListener('click', () => {
+            if (!audioEnabled) toggleAudio();
+            // Just to be sure, touch the audio context
+            if (window.speechSynthesis) window.speechSynthesis.getVoices();
+        }, { once: true });
+
+        function updateAudioUI() {
+            const pill = document.getElementById('audioToggle');
+            if (audioEnabled) {
+                pill.classList.add('enabled');
+                pill.classList.remove('disabled');
+                pill.innerHTML = '<i class="fas fa-volume-up"></i>';
+            } else {
+                pill.classList.add('disabled');
+                pill.classList.remove('enabled');
+                pill.innerHTML = '<i class="fas fa-volume-mute"></i>';
+            }
+        }
+
+        function toggleAudio(e) {
+            if (e) e.stopPropagation();
+            audioEnabled = !audioEnabled;
+            localStorage.setItem('audio_enabled', audioEnabled);
+            updateAudioUI();
+        }
+
+        window.onload = async () => {
+            const history = await getHistoryAPI();
+            loadVoices();
+            checkAutoplay(); // Attempt to auto-unlock
+            videoController.init();
+            
+            // Initial history fetch
+            try {
+                const history = await getHistoryAPI();
+                if (history && history.length > 0) {
+                    // Update with most recent
+                    const last = history[0];
+                    document.getElementById('currentPassword').textContent = formatPassword(last);
+                    document.getElementById('currentGuiche').textContent = 'Guichê ' + last.guiche;
+                    
+                    // Fill history
+                    history.reverse().forEach(item => {
+                        addHistoryItem(item, false);
+                    });
+                }
+            } catch (err) {
+                console.error("Erro ao carregar histórico inicial:", err);
+            }
+
+            updateAudioUI();
+            
+            // Start clock
+            updateClock();
+            setInterval(updateClock, 1000);
+
+            // Start fetching news
+            fetchNews();
+        };
+
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('pt-BR', { hour12: false });
+            const dateStr = now.toLocaleDateString('pt-BR', { 
+                weekday: 'long', 
+                day: 'numeric', 
+                month: 'long' 
+            });
+            
+            document.getElementById('currentTime').textContent = timeStr;
+            document.getElementById('currentDay').textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+        }
+        
+        let audioQueue = [];
+        let isProcessingQueue = false;
+
+        channel.onmessage = (event) => {
+            const { action, data } = event.data;
+            if (action === 'NEW_PASSWORD') {
+                queueAnnouncement(data);
+            } else if (action === 'SPECIALIST_CALL') {
+                queueAnnouncement(data);
+            } else if (action === 'MEDIA_SETTINGS_UPDATED') {
+                videoController.updateSettings(data);
+            }
+        };
+
+        function updatePanel(data) {
+            const currentPassEl = document.getElementById('currentPassword');
+            const currentGuicheEl = document.getElementById('currentGuiche');
+            const mainDisplay = document.getElementById('mainDisplay');
+
+            // Flash effect
+            mainDisplay.classList.add('flashing');
+            setTimeout(() => mainDisplay.classList.remove('flashing'), 2000);
+
+            // Update Current
+            if (data.custom_announcement) {
+                currentPassEl.textContent = data.patient_name;
+                currentPassEl.style.fontSize = data.patient_name.length > 15 ? '5rem' : '7rem'; // Scale down for names
+                currentGuicheEl.textContent = data.service_abbr || data.service_name;
+            } else {
+                currentPassEl.textContent = formatPassword(data);
+                currentPassEl.style.fontSize = ''; // Reset to default CSS
+                currentGuicheEl.textContent = 'Guichê ' + data.guiche;
+            }
+
+            addHistoryItem(data, true);
+        }
+
+        function queueAnnouncement(data) {
+            audioQueue.push(data);
+            if (!isProcessingQueue) {
+                processAudioQueue();
+            }
+        }
+
+        async function processAudioQueue() {
+            if (audioQueue.length === 0) {
+                isProcessingQueue = false;
+                // Resume video if it was playing
+                videoController.resumeAfterCall();
+                return;
+            }
+
+            isProcessingQueue = true;
+            
+            // Pause video before starting announcement
+            videoController.pauseForCall();
+
+            const data = audioQueue.shift();
+
+            // 1. Update Visual Panel (Displays the password currently being announced)
+            updatePanel(data);
+
+            // 2. Play Chime
+            const chime = document.getElementById('chime');
+            if (audioEnabled) {
+                try {
+                    await chime.play();
+                    // Wait for chime to finish
+                    await new Promise(resolve => {
+                        chime.onended = resolve;
+                        setTimeout(resolve, 2000);
+                    });
+                } catch (e) {
+                    console.log("Audio play blocked or failed", e);
+                }
+            }
+
+            // 3. Announce Password
+            await announcePassword(data);
+
+            // 4. Process Next
+            setTimeout(processAudioQueue, 500); 
+        }
+
+        function addHistoryItem(data, isNew) {
+            const historyList = document.getElementById('historyList');
+            
+            // Normalize ID for deduplication
+            const passText = data.custom_announcement ? data.patient_name : formatPassword(data);
+            const labelText = data.custom_announcement ? (data.service_abbr || data.service_name) : ('Guichê ' + data.guiche);
+
+            // Prevent duplicates: remove if already exists
+            const existingItems = historyList.querySelectorAll('.history-item');
+            existingItems.forEach(item => {
+                const itemPass = item.querySelector('.history-password').textContent;
+                const itemLabel = item.querySelector('.history-guiche').textContent;
+                if (itemPass === passText && itemLabel === labelText) {
+                    historyList.removeChild(item);
+                }
+            });
+
+            const li = document.createElement('li');
+            li.className = 'history-item';
+            li.innerHTML = `
+                <span class="history-password" style="${data.custom_announcement ? 'font-size: 1.2rem;' : ''}">${passText}</span>
+                <span class="history-guiche">${labelText}</span>
+            `;
+            
+            if (isNew) {
+                historyList.prepend(li);
+                if (historyList.children.length > 10) {
+                    historyList.removeChild(historyList.lastChild);
+                }
+            } else {
+                historyList.appendChild(li);
+            }
+        }
+
+        function numberToWords(n) {
+            n = parseInt(n);
+            if (isNaN(n)) return '';
+            
+            const unidades = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove'];
+            const dezena1 = ['dez', 'onze', 'doze', 'treze', 'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove'];
+            const dezenas = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
+            const centenas = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+
+            if (n === 0) return 'zero';
+            if (n === 100) return 'cem';
+            
+            let words = '';
+            
+            if (n >= 100) {
+                words += centenas[Math.floor(n / 100)];
+                n %= 100;
+                if (n > 0) words += ' e ';
+            }
+            
+            if (n >= 10 && n <= 19) {
+                words += dezena1[n - 10];
+            } else {
+                if (n >= 20) {
+                    words += dezenas[Math.floor(n / 10)];
+                    n %= 10;
+                    if (n > 0) words += ' e ';
+                }
+                if (n > 0) {
+                    words += unidades[n];
+                }
+            }
+            return words.trim();
+        }
+
+        function announcePassword(data) {
+            if (!audioEnabled) return Promise.resolve();
+            return new Promise((resolve) => {
+                let textToSpeak = "";
+                
+                if (data.custom_announcement) {
+                    textToSpeak = `${data.patient_name}, favor dirigir-se ao ${data.service_name}`;
+                } else {
+                    const types = { 'G': 'Geral', 'P': 'Preferencial', 'O': 'Ouvidoria', 'E': 'Exame' };
+                    const typeName = types[data.type] || data.type;
+                    const numWords = numberToWords(data.number);
+                    const guichWords = numberToWords(data.guiche);
+                    textToSpeak = `Senha ${typeName}, número ${numWords}, guichê ${guichWords}`;
+                }
+
+                console.log('Anunciando:', textToSpeak);
+                
+                const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                utterance.lang = 'pt-BR';
+                utterance.rate = 0.9;
+                utterance.pitch = 1.0;
+                
+                if (voices.length === 0) voices = synth.getVoices();
+                
+                const ptVoice = voices.find(v => v.lang.includes('pt-BR') && 
+                    (v.name.toLowerCase().includes('maria') || v.name.toLowerCase().includes('luciana') || v.name.toLowerCase().includes('google português do brasil'))) 
+                    || voices.find(v => v.lang.includes('pt-BR'));
+                
+                if (ptVoice) utterance.voice = ptVoice;
+                
+                utterance.onend = () => {
+                    resolve();
+                };
+
+                utterance.onerror = () => {
+                    resolve();
+                };
+
+                synth.speak(utterance);
+            });
+        }
+
+        function checkAutoplay() {
+            const chime = document.getElementById('chime');
+            chime.play().then(() => {
+                // Autoplay allowed!
+                console.log("Autoplay detectado como permitido.");
+                document.getElementById('audioUnlockOverlay').style.display = 'none';
+                audioEnabled = true;
+                updateAudioUI();
+            }).catch(() => {
+                // Autoplay blocked
+                console.log("Autoplay bloqueado pelo navegador.");
+                document.getElementById('audioUnlockOverlay').style.display = 'flex';
+            });
+        }
+
+        function unlockAudio() {
+            const chime = document.getElementById('chime');
+            chime.play().then(() => {
+                audioEnabled = true;
+                localStorage.setItem('audio_enabled', 'true');
+                updateAudioUI();
+                document.getElementById('audioUnlockOverlay').style.display = 'none';
+                
+                // Warm up speech synthesis
+                if (window.speechSynthesis) {
+                    const msg = new SpeechSynthesisUtterance('');
+                    window.speechSynthesis.speak(msg);
+                }
+            }).catch(e => console.error("Falha ao desbloquear áudio:", e));
+        }
+
+        async function fetchNews() {
+            const tickerContainer = document.getElementById('newsTicker');
+            
+            // As a client-side app, direct scraping from www.pauloafonso.ba.gov.br might be blocked by CORS.
+            // In a real production scenario, we'd use a proxy or API.
+            // For this demo, we'll use the news I extracted earlier plus some simulated live titles.
+            
+            const newsItems = [
+                "Prefeitura assina Termo de Concessão do Programa Bolsa Atleta e anuncia diversas obras na área esportiva",
+                "Mutirão “+ Saúde, Menos Fila” é sucesso em Paulo Afonso e registra grande adesão da população",
+                "Histórico: Mario Galinho sanciona lei que reduz taxa de esgoto em 50% em Paulo Afonso",
+                "Casa do Empreendedor de Paulo Afonso é inaugurada e recebe o nome do empresário Reginaldo Ramos",
+                "SETIC se reúne com permissionários e anuncia mais melhorias para o Pop Shopping em Paulo Afonso",
+                "Prefeitura entrega obra de requalificação da primeira pista de BMX de Paulo Afonso"
+            ];
+
+            tickerContainer.innerHTML = '';
+            newsItems.forEach(item => {
+                const span = document.createElement('span');
+                span.className = 'ticker-item';
+                span.textContent = item;
+                tickerContainer.appendChild(span);
+            });
+            
+            // Double the content to ensure smooth looping
+            newsItems.forEach(item => {
+                const span = document.createElement('span');
+                span.className = 'ticker-item';
+                span.textContent = item;
+                tickerContainer.appendChild(span);
+            });
+        }
+
+        const videoController = {
+            settings: { playlist: [], interval: 5, delay: 0 },
+            timer: null,
+            isActive: false,
+            currentIndex: 0,
+            isWaitingBetweenVideos: false,
+
+            async init() {
+                try {
+                    const res = await fetch('/api/config/settings');
+                    const settings = await res.json();
+                    if (settings) {
+                        this.settings = {
+                            playlist: settings.video_playlist || [],
+                            interval: settings.video_interval || 5,
+                            delay: settings.video_delay || 0
+                        };
+                        localStorage.setItem('media_settings', JSON.stringify(this.settings));
+                    }
+                } catch (e) {
+                    console.error("Erro ao carregar configurações de vídeo:", e);
+                    const stored = localStorage.getItem('media_settings');
+                    if (stored) this.settings = JSON.parse(stored);
+                }
+                
+                const player = document.getElementById('localVideoPlayer');
+                player.onended = () => this.handleVideoEnd();
+                
+                this.setupTimer();
+            },
+
+            updateSettings(newSettings) {
+                this.settings = newSettings;
+                this.setupTimer();
+            },
+
+            setupTimer() {
+                if (this.timer) clearInterval(this.timer);
+                if (!this.settings.playlist || this.settings.playlist.length === 0 || !this.settings.interval) return;
+
+                const ms = this.settings.interval * 60 * 1000;
+                this.timer = setInterval(() => {
+                    if (!isProcessingQueue && !this.isActive) this.showVideo();
+                }, ms);
+                console.log(`Vídeos agendados para cada ${this.settings.interval} minutos.`);
+            },
+
+            showVideo() {
+                if (!this.settings.playlist || this.settings.playlist.length === 0) return;
+                
+                const overlay = document.getElementById('videoOverlay');
+                this.updateFooter();
+                overlay.style.display = 'flex';
+                this.isActive = true;
+                this.playNext();
+            },
+
+            async updateFooter() {
+                const footer = document.getElementById('videoFooterPills');
+                const history = await getHistoryAPI();
+                const lastItems = history.slice(0, 5); // Show last 5
+                
+                footer.innerHTML = lastItems.map(item => `
+                    <div class="video-pill">
+                        <span class="pill-pass">${formatPassword(item)}</span>
+                        <span class="pill-guiche">Guichê ${item.guiche}</span>
+                    </div>
+                `).join('');
+            },
+
+            playNext() {
+                if (!this.isActive || this.isWaitingBetweenVideos) return;
+                
+                const player = document.getElementById('localVideoPlayer');
+                if (this.currentIndex >= this.settings.playlist.length) {
+                    this.currentIndex = 0;
+                    this.hideVideo();
+                    return;
+                }
+
+                const filename = this.settings.playlist[this.currentIndex];
+                player.src = `/uploads/${filename}`;
+                
+                // Ensure overlay is visible
+                document.getElementById('videoOverlay').style.display = 'flex';
+                this.updateFooter();
+
+                player.play().catch(err => {
+                    console.error("Erro ao dar play no vídeo:", err);
+                    this.currentIndex++;
+                    this.playNext();
+                });
+                this.currentIndex++;
+            },
+
+            handleVideoEnd() {
+                const isLastVideo = this.currentIndex >= this.settings.playlist.length;
+                
+                if (this.settings.delay > 0 && !isLastVideo) {
+                    this.isWaitingBetweenVideos = true;
+                    // Hide overlay to show password screen
+                    document.getElementById('videoOverlay').style.display = 'none';
+                    document.getElementById('localVideoPlayer').src = "";
+                    
+                    setTimeout(() => {
+                        this.isWaitingBetweenVideos = false;
+                        this.playNext();
+                    }, this.settings.delay * 1000);
+                } else {
+                    this.playNext();
+                }
+            },
+
+            hideVideo() {
+                const overlay = document.getElementById('videoOverlay');
+                const player = document.getElementById('localVideoPlayer');
+                overlay.style.display = 'none';
+                player.pause();
+                this.isActive = false;
+                this.currentIndex = 0;
+            },
+
+            pauseForCall() {
+                if (this.isActive) {
+                    const overlay = document.getElementById('videoOverlay');
+                    const player = document.getElementById('localVideoPlayer');
+                    overlay.style.display = 'none';
+                    player.pause();
+                    videoWasPlayingBeforeCall = true;
+                }
+            },
+
+            resumeAfterCall() {
+                if (videoWasPlayingBeforeCall) {
+                    const overlay = document.getElementById('videoOverlay');
+                    const player = document.getElementById('localVideoPlayer');
+                    overlay.style.display = 'flex';
+                    player.play();
+                    videoWasPlayingBeforeCall = false;
+                }
+            }
+        };
+    </script>
+</body>
+</html>
+

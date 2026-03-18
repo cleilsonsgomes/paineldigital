@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel do Especialista - Paulo Afonso</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --secondary: #64748b;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            margin: 0;
+            display: flex;
+            min-height: 100vh;
+            color: #1e293b;
+        }
+
+        .service-container {
+            flex: 1;
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            background: white;
+            padding: 1.5rem 2rem;
+            border-radius: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+
+        .service-selection {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .selection-card {
+            background: white;
+            padding: 3rem;
+            border-radius: 30px;
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .service-list-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .service-opt {
+            padding: 1.5rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 15px;
+            cursor: pointer;
+            font-weight: 700;
+            transition: all 0.2s;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            color: #1e293b;
+        }
+
+        .service-opt:hover {
+            border-color: var(--primary);
+            background: #f0f7ff;
+            transform: translateY(-2px);
+        }
+
+        .queue-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 10px;
+        }
+
+        .queue-table th {
+            text-align: left;
+            padding: 1rem;
+            color: var(--secondary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+
+        .queue-row {
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+
+        .queue-row td {
+            padding: 1.5rem 1rem;
+        }
+
+        .queue-row td:first-child { border-radius: 15px 0 0 15px; }
+        .queue-row td:last-child { border-radius: 0 15px 15px 0; }
+
+        .btn-call {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-call:hover { filter: brightness(1.1); }
+
+        .patient-name { font-weight: 700; color: #1e293b; font-size: 1.1rem; }
+        .ticket-badge { background: #e2e8f0; padding: 4px 10px; border-radius: 6px; font-weight: 900; }
+    </style>
+</head>
+<body>
+    <div id="selectionOverlay" class="service-selection">
+        <div class="selection-card">
+            <h2 style="color: #1e3a8a;">QUAL SUA SALA?</h2>
+            <p>Selecione seu serviço para gerenciar a fila</p>
+            <div class="service-list-grid" id="serviceOptions">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <div class="service-container">
+        <header>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div style="background: #2563eb; color: white; padding: 10px; border-radius: 12px;">
+                    <i class="fas fa-stethoscope fa-lg"></i>
+                </div>
+                <div>
+                    <h1 id="activeServiceTitle" style="margin:0; font-size: 1.3rem;">Serviço Especializado</h1>
+                    <span style="color: #64748b; font-size: 0.9rem;">Gestão de Fila Nominal</span>
+                </div>
+            </div>
+            <button onclick="changeService()" style="background: #f1f5f9; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 600; cursor: pointer;">
+                TROCAR SALA
+            </button>
+        </header>
+
+        <section>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2 style="margin:0; color: #1e293b;"><i class="fas fa-users" style="color: #2563eb;"></i> Aguardando Atendimento</h2>
+                <span id="queueCount" style="background: #e0f2fe; color: #0369a1; padding: 5px 15px; border-radius: 20px; font-weight: 700;">0 Pacientes</span>
+            </div>
+
+            <table class="queue-table">
+                <thead>
+                    <tr>
+                        <th width="40%">Paciente</th>
+                        <th width="20%">Senha</th>
+                        <th width="20%">Tempo</th>
+                        <th width="20%">Ação</th>
+                    </tr>
+                </thead>
+                <tbody id="specialistQueueBody">
+                    <!-- Populated by JS -->
+                </tbody>
+            </table>
+            
+            <div id="emptyMsg" style="text-align: center; padding: 4rem; color: #64748b; display: none;">
+                <i class="fas fa-coffee fa-3x" style="margin-bottom: 1rem; opacity: 0.3;"></i>
+                <p>Nenhum paciente encaminhado no momento para este serviço.</p>
+            </div>
+        </section>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        let currentService = localStorage.getItem('selected_service');
+        const channel = new BroadcastChannel('password_system');
+
+        async function init() {
+            await loadServices();
+
+            if (currentService) {
+                document.getElementById('selectionOverlay').style.display = 'none';
+                document.getElementById('activeServiceTitle').innerText = currentService;
+                fetchQueue();
+                setInterval(fetchQueue, 5000);
+            }
+        }
+
+        async function loadServices() {
+            try {
+                const res = await fetch('/api/public-settings');
+                const settings = await res.json();
+                const roomsString = settings.service_rooms || "";
+                const rooms = roomsString.split(',').map(s => s.trim()).filter(s => s !== '');
+                
+                const grid = document.getElementById('serviceOptions');
+                grid.innerHTML = ''; // Clear previous
+                
+                rooms.forEach(roomRaw => {
+                    const [name, abbr] = roomRaw.split('|').map(s => s.trim());
+                    const opt = document.createElement('div');
+                    opt.className = 'service-opt';
+                    opt.innerHTML = `<i class="fas fa-door-open" style="color: #94a3b8;"></i> ${name} ${abbr ? `<small style="display:block; font-size:0.7rem; color:#64748b;">Sigla: ${abbr}</small>` : ''}`;
+                    opt.onclick = () => selectService(roomRaw);
+                    grid.appendChild(opt);
+                });
+            } catch (e) {
+                console.error("Erro ao carregar salas", e);
+            }
+        }
+
+        function selectService(roomRaw) {
+            currentService = roomRaw;
+            localStorage.setItem('selected_service', roomRaw);
+            document.getElementById('selectionOverlay').style.display = 'none';
+            
+            const [name, abbr] = roomRaw.split('|').map(s => s.trim());
+            document.getElementById('activeServiceTitle').innerText = name;
+            fetchQueue();
+            setInterval(fetchQueue, 5000);
+        }
+
+        function changeService() {
+            document.getElementById('selectionOverlay').style.display = 'flex';
+        }
+
+        async function fetchQueue() {
+            if (!currentService) return;
+            try {
+                const res = await fetch(`/api/service-queue?service=${encodeURIComponent(currentService)}`);
+                const data = await res.json();
+                renderQueue(data);
+            } catch (e) {
+                console.error("Erro ao buscar fila", e);
+            }
+        }
+
+        function renderQueue(patients) {
+            const tbody = document.getElementById('specialistQueueBody');
+            const empty = document.getElementById('emptyMsg');
+            document.getElementById('queueCount').innerText = `${patients.length} Pacientes`;
+
+            if (patients.length === 0) {
+                tbody.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+
+            empty.style.display = 'none';
+            tbody.innerHTML = '';
+            patients.forEach(p => {
+                const row = document.createElement('tr');
+                row.className = 'queue-row';
+                const timeStr = new Date(p.created_at).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                const isCalled = p.status === 'CALLED_SPECIALIST';
+                
+                row.innerHTML = `
+                    <td>
+                        <div class="patient-name">${p.patient_name}</div>
+                        <div style="font-size: 0.8rem; color:#64748b">CPF: ${p.patient_cpf || 'Não inf.'}</div>
+                    </td>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span class="ticket-badge">${formatPassword(p)}</span>
+                            ${isCalled ? '<span style="background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:12px; font-size:0.7rem; font-weight:700;">CHAMADO</span>' : ''}
+                        </div>
+                    </td>
+                    <td>${timeStr}</td>
+                    <td>
+                        <div style="display:flex; gap:10px;">
+                            <button class="btn-call" title="Chamar Novamente" onclick="callPatient(${p.id}, '${p.patient_name.replace(/'/g, "\\'")}')">
+                                <i class="fas fa-bullhorn"></i>
+                            </button>
+                            <button class="btn-call" style="background:#10b981;" onclick="confirmAppointment(${p.id})">
+                                <i class="fas fa-check"></i> CONFIRMAR
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        async function confirmAppointment(id) {
+            if (!confirm("Confirmar que o atendimento foi realizado?")) return;
+            try {
+                await fetch(`/api/passwords/${id}/complete`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` }
+                });
+                fetchQueue();
+            } catch (e) {
+                alert("Erro ao confirmar atendimento.");
+            }
+        }
+
+        async function callPatient(id, name) {
+            try {
+                const res = await fetch(`/api/passwords/${id}/call-specialist`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` }
+                });
+                const ticket = await res.json();
+                
+                // Map Name|Abbr
+                const [fullName, abbr] = currentService.split('|').map(s => s.trim());
+                
+                // Add the name and custom destination for the panel
+                ticket.custom_announcement = true;
+                ticket.patient_name = name;
+                ticket.service_name = fullName;
+                ticket.service_abbr = abbr || fullName;
+
+                channel.postMessage({ action: 'SPECIALIST_CALL', data: ticket });
+                fetchQueue();
+            } catch (e) {
+                alert("Erro ao chamar paciente.");
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

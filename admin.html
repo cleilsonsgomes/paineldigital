@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Digital - Administração</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Export Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: #2563eb;
+            color: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+        }
+        .notification.active { transform: translateX(0); }
+        .notification.error { background: #ef4444; }
+        #view-reports.active {
+            display: flex !important;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body class="admin-body">
+    
+    <!-- Login Overlay -->
+    <div id="loginOverlay" class="login-overlay" style="display: none;">
+        <div class="login-card">
+            <img id="loginLogo" src="logo.png" alt="Logo" style="height: 60px; margin-bottom: 20px;">
+            <h2>Acesso Restrito</h2>
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <input type="text" id="loginUser" placeholder="Usuário" required>
+                <input type="password" id="loginPass" placeholder="Senha" required>
+                <div id="loginError" style="color: #ef4444; margin-bottom: 15px; font-weight: 600; display: none;"></div>
+                <button type="submit">ENTRAR NO SISTEMA</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="admin-wrapper" id="adminWrapper" style="display: none;">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img id="sidebarLogo" src="logo.png" alt="PMPA" class="sidebar-logo">
+                <div class="header-text-mobile">
+                    <h3 style="margin:0; font-size: 1.1rem;">Digital</h3>
+                    <p style="margin:0; font-size: 0.8rem; opacity: 0.7;">Administração</p>
+                </div>
+                <button class="mobile-logout-btn" onclick="handleLogout()" style="display: none; border:none; background:none; color:white; font-size: 1.5rem; margin-left: auto;">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-item active" onclick="switchView('dashboard', this)">
+                    <i class="fas fa-chart-line"></i> Dashboard
+                </div>
+                <div class="nav-item" onclick="switchView('calling', this)">
+                    <i class="fas fa-bell"></i> Chamada de Senhas
+                </div>
+                <div class="nav-item" onclick="switchView('specialist', this)">
+                    <i class="fas fa-user-md"></i> <span>Consultório</span>
+                </div>
+                <div id="navReports" class="nav-item" onclick="switchView('reports', this)" style="display: none;">
+                    <i class="fas fa-file-invoice"></i> Relatórios
+                </div>
+
+                <div id="navConfig" class="nav-item" onclick="switchView('config', this)" style="display: none;">
+                    <i class="fas fa-cog"></i> Configurações
+                </div>
+                <div id="navUsers" class="nav-item" onclick="switchView('users', this)" style="display: none;">
+                    <i class="fas fa-users"></i> Usuários
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div style="margin-bottom: 5px;">
+                    <span id="userNameDisplay" style="font-weight: 600;">Administrador</span>
+                    <br>
+                    <span id="userRoleDisplay" style="font-size: 0.8rem; opacity: 0.7;">Admin</span>
+                </div>
+                <button class="logout-link" onclick="handleLogout()">
+                    <i class="fas fa-sign-out-alt"></i> Sair do Sistema
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            
+            <!-- Dashboard View -->
+            <section id="view-dashboard" class="view-section active">
+                <div class="page-header">
+                    <h1>Dashboard Principal</h1>
+                </div>
+                
+                <div class="dashboard-stats">
+                    <div class="stat-card">
+                        <span class="stat-label">Total Hoje</span>
+                        <span class="stat-value" id="totalPasses">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Geral</span>
+                        <span class="stat-value" id="totalGeral">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Preferencial</span>
+                        <span class="stat-value" id="totalPref">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Ouvidoria</span>
+                        <span class="stat-value" id="totalOuvidoria">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Tempo Médio</span>
+                        <span class="stat-value" id="avgWait">0</span>
+                        <span style="font-size: 0.8rem; color: #64748b;">minutos</span>
+                    </div>
+                </div>
+
+                <div class="dashboard-charts" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 2rem; margin-top: 2rem;">
+                    <div class="stat-card" style="padding: 1.5rem; height: 350px; display: flex; flex-direction: column;">
+                        <h3 style="margin-top: 0; color: #1e293b; font-size: 1rem;"><i class="fas fa-chart-area" style="color: #2563eb;"></i> Atendimentos por Hora</h3>
+                        <div style="flex: 1; position: relative;"><canvas id="hourlyChart"></canvas></div>
+                    </div>
+                    <div class="stat-card" style="padding: 1.5rem; height: 350px; display: flex; flex-direction: column;">
+                        <h3 style="margin-top: 0; color: #1e293b; font-size: 1rem;"><i class="fas fa-chart-pie" style="color: #10b981;"></i> Distribuição por Sala</h3>
+                        <div style="flex: 1; position: relative;"><canvas id="servicesChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="tips-box" style="margin-top: 2rem; background: #f8fafc; border: 1px solid #e2e8f0;">
+                    <h3 style="color: #475569;"><i class="fas fa-lightbulb" style="color: #f59e0b;"></i> Insight de Desempenho</h3>
+                    <p id="dashboardTip">O tempo médio é calculado com base na diferença entre a emissão no totem e a chamada no painel.</p>
+                </div>
+            </section>
+
+            <!-- Calling View -->
+            <section id="view-calling" class="view-section">
+                <div class="page-header">
+                    <h1>Controle de Chamadas</h1>
+                    <div class="counter-select-group">
+                        <label style="font-weight: 700; margin-right: 10px;">SEU GUICHÊ:</label>
+                        <select id="guicheSelect" onchange="saveGuichePreference()" style="padding: 8px; border-radius: 8px;">
+                            <!-- Populated by JS -->
+                        </select>
+                        <button class="add-toggle-btn" onclick="toggleAddCounter(true)" style="padding: 5px 10px;">+</button>
+                    </div>
+                </div>
+
+                <div class="admin-layout">
+                    <div class="queue-section">
+                        <h2>📋 Fila de Espera</h2>
+                        <div class="table-container">
+                            <table class="modern-table">
+                                <thead>
+                                    <tr>
+                                        <th>Senha</th>
+                                        <th>Tipo</th>
+                                        <th>Chegada</th>
+                                        <th>Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pendingQueueBody"></tbody>
+                            </table>
+                            <div id="emptyQueueMsg" class="empty-msg">Fila vazia</div>
+                        </div>
+                    </div>
+
+                    <div class="controls-section">
+                        <button class="call-btn-main" onclick="callNextAuto()" style="margin-bottom: 1rem;">
+                            <i class="fas fa-bolt"></i> PRÓXIMA (AUTO)
+                        </button>
+                        <button class="recall-btn" onclick="recallLast()" style="width: 100%;">
+                            <i class="fas fa-redo"></i> Repetir Última
+                        </button>
+                        
+                        <div class="counter-manager" id="guicheAddGroup" style="display: none; margin-top: 2rem; padding: 1rem; background: white; border-radius: 15px;">
+                            <h4 style="margin-top:0">Novo Guichê</h4>
+                            <input type="text" id="newGuicheName" placeholder="Nome/Nº" style="width: 100%; padding: 8px; margin-bottom: 10px;">
+                            <button class="confirm-btn" onclick="confirmAddCounter()" style="width: 100%;">ADICIONAR</button>
+                            <button class="cancel-btn" onclick="toggleAddCounter(false)" style="width: 100%; margin-top: 5px;">CANCELAR</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Config View -->
+            <section id="view-config" class="view-section">
+                <div class="page-header">
+                    <h1>Configurações de Mídia</h1>
+                </div>
+
+                <div class="upload-area" onclick="document.getElementById('videoFileInput').click()">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <h3>Arraste ou Clique para Upload de Vídeo</h3>
+                    <p>Formatos aceitos: MP4, MOV, AVI</p>
+                    <input type="file" id="videoFileInput" style="display: none;" onchange="handleVideoUpload(this)">
+                </div>
+                <div id="uploadStatus" style="margin-bottom: 20px; font-weight: 600;"></div>
+
+                <div class="media-config-section">
+                    <h3>🎬 Lista de Reprodução</h3>
+                    <div class="video-playlist-container">
+                        <div id="videoPlaylist" class="video-grid">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                    
+                    <div class="config-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 2rem; background: #f8fafc; padding: 1.5rem; border-radius: 15px;">
+                        <div class="input-group">
+                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #475569;">FREQUÊNCIA DA FILA (MINUTOS)</label>
+                            <input type="number" id="videoInterval" min="1" placeholder="Ex: 5" onchange="saveMediaSettings()" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px;">
+                            <small style="color: #64748b;">Tempo entre cada exibição da lista completa.</small>
+                        </div>
+                        <div class="input-group">
+                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #475569;">INTERVALO ENTRE VÍDEOS (SEGUNDOS)</label>
+                            <input type="number" id="videoDelay" min="0" placeholder="Ex: 5" onchange="saveMediaSettings()" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px;">
+                            <small style="color: #64748b;">Pausa entre um vídeo e outro na mesma fila.</small>
+                        </div>
+                    </div>
+
+                    <div class="config-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 2rem; background: #f0f9ff; padding: 1.5rem; border-radius: 15px; border: 1px solid #bae6fd;">
+                        <div style="grid-column: span 2; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 10px; color: #0369a1;">
+                            <i class="fas fa-print"></i> <h3 style="margin:0">Configuração de Impressão (Totem)</h3>
+                        </div>
+                        <div class="input-group">
+                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #475569;">MODO DE EMISSÃO</label>
+                            <select id="printMode" onchange="savePrintSettings()" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px;">
+                                <option value="simulate">Simular Impressão (Navegador)</option>
+                                <option value="network">Impressora de Rede (Térmica)</option>
+                            </select>
+                            <small style="color: #64748b;">Escolha como as senhas serão emitidas no totem.</small>
+                        </div>
+                        <div class="input-group" id="printerIpGroup">
+                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #475569;">IP DA IMPRESSORA</label>
+                            <input type="text" id="printerIp" placeholder="Ex: 192.168.1.50" onchange="savePrintSettings()" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px;">
+                            <small style="color: #64748b;">IP fixo da impressora térmica na sua rede.</small>
+                        </div>
+                    </div>
+
+                    <div class="config-grid" style="margin-top: 2rem; background: #fefce8; padding: 1.5rem; border-radius: 15px; border: 1px solid #fef08a;">
+                        <div style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 10px; color: #854d0e;">
+                            <i class="fas fa-door-open"></i> <h3 style="margin:0">Salas e Serviços de Atendimento</h3>
+                        </div>
+                        <div class="input-group">
+                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #475569;">LISTA DE SALAS (Formato: Nome|Sigla, separados por vírgula)</label>
+                            <textarea id="serviceRoomsConfig" onchange="savePrintSettings()" placeholder="Ex: Farmácia|FARM, Consultório Médico|CONS 01" style="width: 100%; height: 80px; padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px; font-family: inherit; resize: vertical;"></textarea>
+                            <small style="color: #64748b;">O Nome é usado para a voz e a Sigla para exibição no telão (ex: Sala de Vacina|VACINA).</small>
+                        </div>
+                    </div>
+
+                    <div class="config-grid" style="margin-top: 2rem; background: #fdf2f8; padding: 1.5rem; border-radius: 15px; border: 1px solid #fbcfe8;">
+                        <div style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 10px; color: #9d174d;">
+                            <i class="fas fa-image"></i> <h3 style="margin:0">Identidade Visual (Logo)</h3>
+                        </div>
+                        <div class="input-group">
+                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #475569;">LOGO DO SISTEMA (Relatórios e Login)</label>
+                            <div style="display: flex; gap: 15px; align-items: center;">
+                                <div id="currentLogoPreview" style="width: 60px; height: 60px; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                                    <img id="logoPreviewImg" src="logo.png" style="max-width: 100%; max-height: 100%;">
+                                </div>
+                                <input type="file" id="logoInput" accept="image/*" onchange="handleLogoUpload(this)" style="padding: 8px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.8rem;">
+                            </div>
+                            <small style="color: #64748b;">A logo será usada no cabeçalho dos Relatórios em PDF e na tela de login.</small>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 3rem; border-top: 2px dashed #e2e8f0; padding-top: 2rem; text-align: center;">
+                        <button class="reset-btn" onclick="resetSystem()" style="background: #fee2e2; color: #b91c1c; border: none; padding: 12px 25px; border-radius: 12px; font-weight: 700; cursor: pointer;">
+                            <i class="fas fa-exclamation-triangle"></i> ZERAR CONFIGURAÇÕES LOCAIS
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Users View -->
+            <section id="view-users" class="view-section">
+                <div class="page-header">
+                    <h1>Gestão de Usuários</h1>
+                    <button class="confirm-btn" onclick="showAddUserModal()">+ NOVO USUÁRIO</button>
+                </div>
+
+                <div id="usersList">
+                    <!-- Populated by JS -->
+                </div>
+
+                <!-- Add User Modal (Simulated) -->
+                <div id="addUserForm" style="display: none; margin-top: 2rem; padding: 2rem; background: white; border-radius: 20px; border: 1px solid #e2e8f0;">
+                    <h3>Cadastrar Novo Usuário</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                        <input type="text" id="newUsername" placeholder="Usuário" style="padding: 10px;">
+                        <input type="password" id="newUserPass" placeholder="Senha" style="padding: 10px;">
+                        <select id="newUserRole" style="padding: 10px;">
+                            <option value="operator">Operador</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div style="margin-top: 1rem;">
+                        <button class="confirm-btn" onclick="saveNewUser()">SALVAR USUÁRIO</button>
+                        <button class="cancel-btn" onclick="document.getElementById('addUserForm').style.display='none'">CANCELAR</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Modal de Atendimento (Triagem) -->
+            <div id="forwardModal" class="modal-overlay" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
+                <div class="modal-content" style="background: white; max-width: 500px; width: 90%; padding: 2.5rem; border-radius: 25px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                        <h2 style="margin:0; color: #1e3a8a; font-size: 1.5rem;"><i class="fas fa-user-edit" style="margin-right: 10px;"></i> Registro do Cidadão</h2>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <button onclick="repeatTriageCall()" title="Chamar Novamente" style="background: #e0f2fe; border: none; padding: 8px 15px; border-radius: 10px; color: #0369a1; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-bullhorn"></i> CHAMAR
+                            </button>
+                            <button onclick="closeForwardModal()" style="background: #f1f5f9; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">&times;</button>
+                        </div>
+                    </div>
+                    
+                    <form id="forwardForm" onsubmit="event.preventDefault(); submitForward();">
+                        <input type="hidden" id="forwardTicketId">
+                        <div class="input-group" style="margin-bottom: 1.2rem;">
+                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #475569; font-size: 0.8rem;">NOME COMPLETO</label>
+                            <input type="text" id="patientName" required placeholder="Digite o nome do cidadão" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none; transition: border-color 0.2s;">
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin-bottom: 1.2rem;">
+                            <div class="input-group">
+                                <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #475569; font-size: 0.8rem;">CPF</label>
+                                <input type="text" id="patientCPF" placeholder="000.000.000-00" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none;">
+                            </div>
+                            <div class="input-group">
+                                <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #475569; font-size: 0.8rem;">NASCIMENTO</label>
+                                <input type="date" id="patientBirth" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none;">
+                            </div>
+                        </div>
+                        <div class="input-group" style="margin-bottom: 2rem;">
+                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #475569; font-size: 0.8rem;">ENCAMINHAR PARA:</label>
+                            <select id="destinationService" required style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none; background: white;">
+                                <option value="">Selecione o serviço de destino...</option>
+                                <option value="Serviço Social">Serviço Social</option>
+                                <option value="Farmácia">Farmácia</option>
+                                <option value="Consultório Médico">Consultório Médico</option>
+                                <option value="Sala de Vacina">Sala de Vacina</option>
+                                <option value="Ouvidoria">Ouvidoria (Presencial)</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 1rem;">
+                            <button type="button" onclick="closeForwardModal()" style="flex: 1; padding: 14px; border-radius: 12px; border: 2px solid #e2e8f0; background: #f8fafc; font-weight: 700; cursor: pointer; color: #64748b;">DESCARTAR</button>
+                            <button type="submit" style="flex: 2; padding: 14px; border-radius: 12px; border: none; background: #2563eb; color: #fff; font-weight: 700; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);">ENCAMINHAR</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <!-- Reports View -->
+            <section id="view-reports" class="view-section" style="min-height: calc(100vh - 150px);">
+                <div class="report-generator-card" style="background: white; width: 100%; max-width: 600px; padding: 2.5rem; border-radius: 30px; box-shadow: 0 10px 40px -10px rgba(0,0,0,0.1); border: 1px solid #f1f5f9;">
+                    <div style="text-align: center; margin-bottom: 2rem;">
+                        <div style="width: 60px; height: 60px; background: #eff6ff; color: #2563eb; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; font-size: 1.5rem;">
+                            <i class="fas fa-file-invoice"></i>
+                        </div>
+                        <h2 style="margin:0; color: #1e293b; font-size: 1.8rem; letter-spacing: -0.5px;">Gerador de Relatórios</h2>
+                        <p style="color: #64748b; margin-top: 0.5rem;">Filtre os atendimentos e exporte os dados.</p>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+                        <div class="input-group">
+                            <label style="display: block; font-size:0.75rem; font-weight:800; color:#475569; margin-bottom: 8px; text-transform: uppercase;"><i class="fas fa-calendar-alt" style="margin-right:5px;"></i> Início</label>
+                            <input type="date" id="repStart" style="width:100%; padding: 14px; border:2px solid #f1f5f9; border-radius:12px; font-family: inherit; outline: none; transition: border-color 0.2s;">
+                        </div>
+                        <div class="input-group">
+                            <label style="display: block; font-size:0.75rem; font-weight:800; color:#475569; margin-bottom: 8px; text-transform: uppercase;"><i class="fas fa-calendar-check" style="margin-right:5px;"></i> Fim</label>
+                            <input type="date" id="repEnd" style="width:100%; padding: 14px; border:2px solid #f1f5f9; border-radius:12px; font-family: inherit; outline: none; transition: border-color 0.2s;">
+                        </div>
+                        <div class="input-group">
+                            <label style="display: block; font-size:0.75rem; font-weight:800; color:#475569; margin-bottom: 8px; text-transform: uppercase;"><i class="fas fa-list-ul" style="margin-right:5px;"></i> Tipo</label>
+                            <select id="repType" style="width:100%; padding: 14px; border:2px solid #f1f5f9; border-radius:12px; appearance: none; background: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22/%3E%3C/svg%3E') no-repeat right 1rem center; background-size: 10px;">
+                                <option value="">Todos os Tipos</option>
+                                <option value="Geral">Geral</option>
+                                <option value="Preferencial">Preferencial</option>
+                                <option value="Ouvidoria">Ouvidoria</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label style="display: block; font-size:0.75rem; font-weight:800; color:#475569; margin-bottom: 8px; text-transform: uppercase;"><i class="fas fa-map-marker-alt" style="margin-right:5px;"></i> Sala/Serviço</label>
+                            <select id="repService" style="width:100%; padding: 14px; border:2px solid #f1f5f9; border-radius:12px; appearance: none; background: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22/%3E%3C/svg%3E') no-repeat right 1rem center; background-size: 10px;">
+                                <option value="">Todas as Salas</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="reportStatus" style="text-align: center; margin-bottom: 2rem; min-height: 20px;">
+                        <span style="color: #94a3b8; font-size: 0.9rem;">Preencha os filtros para gerar o arquivo.</span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 1rem;">
+                        <div id="exportButtons" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                            <button onclick="exportPDF()" style="padding: 16px; border-radius: 12px; border: none; background: #ef4444; color: white; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1rem;">
+                                <i class="fas fa-file-pdf"></i> GERAR PDF
+                            </button>
+                            <button onclick="exportExcel()" style="padding: 16px; border-radius: 12px; border: none; background: #10b981; color: white; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1rem;">
+                                <i class="fas fa-file-excel"></i> GERAR EXCEL
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- Specialist View (Specialized Rooms) -->
+            <section id="view-specialist" class="view-section" style="height: calc(100vh - 100px); padding: 0; overflow: hidden;">
+                <iframe src="consultorio.html" style="width: 100%; height: 100%; border: none; border-radius: 20px;"></iframe>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        async function loadPrintSettings() {
+            try {
+                const response = await fetch('/api/config/settings');
+                const settings = await response.json();
+                if (settings.print_mode) document.getElementById('printMode').value = settings.print_mode;
+                if (settings.printer_ip) document.getElementById('printerIp').value = settings.printer_ip;
+                if (settings.service_rooms) {
+                    document.getElementById('serviceRoomsConfig').value = settings.service_rooms;
+                    updateTriageSelect(settings.service_rooms);
+                }
+                
+                // Populate Video Settings from DB
+                if (settings.video_playlist) {
+                    const playlist = JSON.parse(settings.video_playlist);
+                    renderPlaylist(playlist);
+                    // Update localStorage as a fallback cache
+                    localStorage.setItem('media_settings', JSON.stringify({
+                        playlist: playlist,
+                        interval: parseInt(settings.video_interval) || 5,
+                        delay: parseInt(settings.video_delay) || 0
+                    }));
+                }
+                if (settings.video_interval) document.getElementById('videoInterval').value = settings.video_interval;
+                if (settings.video_delay) document.getElementById('videoDelay').value = settings.video_delay;
+
+                if (settings.system_logo) {
+                    const url = settings.system_logo;
+                    const preview = document.getElementById('logoPreviewImg');
+                    if (preview) preview.src = url;
+                    const sideLogo = document.querySelector('.sidebar-logo');
+                    if (sideLogo) sideLogo.src = url;
+                    const loginLogo = document.querySelector('.login-card img');
+                    if (loginLogo) loginLogo.src = url;
+                }
+                togglePrinterIpField();
+            } catch (e) {
+                console.error("Erro ao carregar configurações de impressão", e);
+            }
+        }
+
+        function updateTriageSelect(roomsString) {
+            const select = document.getElementById('destinationService');
+            if (!select) return;
+            const rooms = roomsString.split(',').map(s => s.trim()).filter(s => s !== '');
+            
+            // Keep the first default option
+            select.innerHTML = '<option value="">Selecione o serviço de destino...</option>';
+            rooms.forEach(roomRaw => {
+                const [name, abbr] = roomRaw.split('|').map(s => s.trim());
+                const opt = document.createElement('option');
+                opt.value = roomRaw; // Store full Raw to pass to API
+                opt.textContent = abbr ? `${name} (${abbr})` : name;
+                select.appendChild(opt);
+            });
+        }
+
+        function togglePrinterIpField() {
+            const mode = document.getElementById('printMode').value;
+            const group = document.getElementById('printerIpGroup');
+            group.style.opacity = mode === 'network' ? '1' : '0.5';
+            document.getElementById('printerIp').disabled = mode !== 'network';
+        }
+
+        async function savePrintSettings() {
+            togglePrinterIpField();
+            const mode = document.getElementById('printMode').value;
+            const ip = document.getElementById('printerIp').value;
+            const rooms = document.getElementById('serviceRoomsConfig').value;
+            
+            // Update the triage select immediately for better UX
+            updateTriageSelect(rooms);
+
+            try {
+                await fetch('/api/config/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ print_mode: mode, printer_ip: ip, service_rooms: rooms })
+                });
+            } catch (e) {
+                alert("Erro ao salvar configurações");
+            }
+        }
+        const channel = new BroadcastChannel('password_system');
+        let currentUser = null;
+
+        async function applyPublicBranding() {
+            try {
+                const res = await fetch('/api/public-settings');
+                const data = await res.json();
+                if (data.system_logo) {
+                    const logoUrl = data.system_logo;
+                    const loginLogo = document.getElementById('loginLogo');
+                    const sidebarLogo = document.getElementById('sidebarLogo');
+                    if (loginLogo) loginLogo.src = logoUrl;
+                    if (sidebarLogo) sidebarLogo.src = logoUrl;
+                }
+            } catch (e) {
+                console.error("Erro ao carregar branding público:", e);
+            }
+        }
+
+        window.onload = async () => {
+            // Apply branding first (public)
+            await applyPublicBranding();
+
+            // Check auth
+            try {
+                currentUser = await apiGetMe();
+                if (currentUser) {
+                    showAdmin(currentUser);
+                    loadPrintSettings();
+                } else {
+                    showLogin();
+                }
+            } catch (e) {
+                showLogin();
+            }
+        };
+
+        function showLogin() {
+            document.getElementById('loginOverlay').style.display = 'flex';
+            document.getElementById('adminWrapper').style.display = 'none';
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const user = document.getElementById('loginUser').value;
+            const pass = document.getElementById('loginPass').value;
+            const error = document.getElementById('loginError');
+            
+            try {
+                currentUser = await apiLogin(user, pass);
+                showAdmin(currentUser);
+                error.style.display = 'none';
+            } catch (err) {
+                error.textContent = err.message;
+                error.style.display = 'block';
+            }
+        }
+
+        async function handleLogout() {
+            await apiLogout();
+            window.location.reload();
+        }
+
+        function showAdmin(user) {
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('adminWrapper').style.display = 'flex';
+            document.getElementById('userNameDisplay').textContent = user.username;
+            document.getElementById('userRoleDisplay').textContent = user.role.toUpperCase();
+            if (user.role === 'admin') {
+                document.getElementById('navUsers').style.setProperty('display', 'flex', 'important');
+                document.getElementById('navConfig').style.setProperty('display', 'flex', 'important');
+                document.getElementById('navReports').style.setProperty('display', 'flex', 'important');
+            } else {
+                document.getElementById('navUsers').style.setProperty('display', 'none', 'important');
+                document.getElementById('navConfig').style.setProperty('display', 'none', 'important');
+                document.getElementById('navReports').style.setProperty('display', 'none', 'important');
+            }
+            
+            // Initial data
+            updateCounterList();
+            updateQueueUI();
+            updateDashboard();
+            loadMediaSettings();
+            loadPrintSettings();
+            
+            // Polling
+            setInterval(updateQueueUI, 2000);
+            setInterval(updateDashboard, 10000);
+        }
+
+        function switchView(viewId, el) {
+            // Role protection
+            if ((viewId === 'users' || viewId === 'config') && currentUser?.role !== 'admin') {
+                showNotification("Acesso restrito a administradores", "error");
+                return;
+            }
+
+            // Nav active state
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            if (el) el.classList.add('active');
+            
+            // View visibility
+            document.querySelectorAll('.view-section').forEach(section => section.classList.remove('active'));
+            document.getElementById(`view-${viewId}`).classList.add('active');
+            
+            if (viewId === 'users') loadUsers();
+            if (viewId === 'dashboard') updateDashboard();
+            if (viewId === 'config') loadPrintSettings();
+            if (viewId === 'reports') {
+                // Set default dates to today
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('repStart').value = today;
+                document.getElementById('repEnd').value = today;
+                populateReportServices();
+                loadReports();
+            }
+
+        }
+
+        async function populateReportServices() {
+            const res = await fetch('/api/public-settings');
+            const data = await res.json();
+            const rooms = (data.service_rooms || "").split(',').map(s => s.trim()).filter(s => s !== "");
+            const sel = document.getElementById('repService');
+            sel.innerHTML = '<option value="">Todos</option>';
+            rooms.forEach(rRaw => {
+                const [name, abbr] = rRaw.split('|').map(s => s.trim());
+                const opt = document.createElement('option');
+                opt.value = rRaw;
+                opt.textContent = abbr ? `${name} (${abbr})` : name;
+                sel.appendChild(opt);
+            });
+        }
+
+        let currentReportData = [];
+
+        async function getFilteredData() {
+            const start = document.getElementById('repStart').value;
+            const end = document.getElementById('repEnd').value;
+            const type = document.getElementById('repType').value;
+            const service = document.getElementById('repService').value;
+            const statusEl = document.getElementById('reportStatus');
+
+            statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando dados...';
+
+            try {
+                const res = await fetch(`/api/reports?start=${start}&end=${end}&type=${type}&service=${service}`);
+                const data = await res.json();
+                
+                if (data.length > 0) {
+                    statusEl.innerHTML = `<span style="color: #10b981; font-weight: 700;"><i class="fas fa-check-circle"></i> ${data.length} atendimentos encontrados!</span>`;
+                    return data;
+                } else {
+                    statusEl.innerHTML = '<span style="color: #64748b;"><i class="fas fa-info-circle"></i> Nenhum dado neste período.</span>';
+                    return null;
+                }
+            } catch (e) {
+                console.error("Erro ao carregar relatórios", e);
+                statusEl.innerHTML = '<span style="color: #ef4444;"><i class="fas fa-exclamation-circle"></i> Erro ao buscar dados.</span>';
+                return null;
+            }
+        }
+
+        async function exportPDF() {
+            const data = await getFilteredData();
+            if (!data) return;
+
+            if (!window.jspdf) {
+                alert("Biblioteca PDF não carregada.");
+                return;
+            }
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Get logo
+            let logoBase64 = null;
+            const logoImg = document.getElementById('logoPreviewImg');
+            if (logoImg && logoImg.src && !logoImg.src.includes('logo.png') && logoImg.src.startsWith('http')) {
+                try {
+                    logoBase64 = await getImageBase64(logoImg.src);
+                } catch(e) { console.error("Erro ao converter logo", e); }
+            }
+
+            const startText = document.getElementById('repStart').value;
+            const endText = document.getElementById('repEnd').value;
+            const generationTime = new Date().toLocaleString('pt-BR');
+
+            const tableData = data.map(p => [
+                formatPassword(p),
+                p.patient_name || '-',
+                p.destination_service || '-',
+                p.created_at ? new Date(p.created_at).toLocaleString('pt-BR') : '-',
+                p.served_at ? new Date(p.served_at).toLocaleString('pt-BR') : '-'
+            ]);
+
+            doc.autoTable({
+                startY: 45,
+                head: [['Senha', 'Cidadão', 'Sala', 'Emissão', 'Conclusão']],
+                body: tableData,
+                theme: 'striped',
+                headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+                alternateRowStyles: { fillColor: [248, 250, 252] },
+                margin: { top: 45, bottom: 20 },
+                didDrawPage: function (hookData) {
+                    // Header
+                    if (logoBase64) {
+                        try { doc.addImage(logoBase64, 'PNG', 14, 10, 25, 25); } catch(e) {}
+                    }
+                    
+                    doc.setFontSize(18);
+                    doc.setTextColor(37, 99, 235);
+                    doc.text("Relatório de Atendimentos", logoBase64 ? 45 : 14, 20);
+                    
+                    doc.setFontSize(9);
+                    doc.setTextColor(100);
+                    doc.text(`Período: ${startText} até ${endText}`, logoBase64 ? 45 : 14, 27);
+
+                    // Footer
+                    const str = "Página " + doc.internal.getNumberOfPages();
+                    doc.setFontSize(8);
+                    const pageSize = doc.internal.pageSize;
+                    const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+                    doc.text(str, hookData.settings.margin.left, pageHeight - 10);
+                    doc.text(`Gerado em: ${generationTime}`, pageSize.width - 60, pageHeight - 10);
+                }
+            });
+
+            doc.save(`relatorio_${new Date().getTime()}.pdf`);
+        }
+
+        async function exportExcel() {
+            const data = await getFilteredData();
+            if (!data) return;
+
+            const wsData = [
+                ['Senha', 'Cidadão', 'Sala', 'Emissão', 'Chamada', 'Conclusão'],
+                ...data.map(p => [
+                    formatPassword(p),
+                    p.patient_name || '-',
+                    p.destination_service || '-',
+                    p.created_at ? new Date(p.created_at).toLocaleString('pt-BR') : '-',
+                    p.called_at ? new Date(p.called_at).toLocaleString('pt-BR') : '-',
+                    p.served_at ? new Date(p.served_at).toLocaleString('pt-BR') : '-'
+                ])
+            ];
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Relatório");
+            XLSX.writeFile(wb, `relatorio_${new Date().getTime()}.xlsx`);
+        }
+
+        async function handleLogoUpload(input) {
+            if (!input.files || !input.files[0]) return;
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+
+            try {
+                const res = await fetch('/api/config/logo', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await res.json();
+                if (res.ok && data.url) {
+                    document.getElementById('logoPreviewImg').src = data.url;
+                    // Also update login logo if it exists
+                    const loginLogo = document.querySelector('.login-card img');
+                    if (loginLogo) loginLogo.src = data.url;
+                    showNotification("Logo atualizada com sucesso!");
+                } else {
+                    const errMsg = data.error || `Erro ${res.status}`;
+                    showNotification(errMsg, 'error');
+                    console.error("Logo upload error:", data);
+                }
+            } catch (e) {
+                console.error("Logo upload fetch failure:", e);
+                alert("Erro de conexão ao enviar logo. Verifique o servidor.");
+            }
+        }
+
+        async function getImageBase64(url) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.setAttribute('crossOrigin', 'anonymous');
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    resolve(canvas.toDataURL('image/png'));
+                };
+                img.onerror = reject;
+                img.src = url;
+            });
+        }
+
+        // Dashboard logic
+        let hourlyChart = null;
+        let servicesChart = null;
+
+        async function updateDashboard() {
+            const stats = await getStatsAPI();
+            if (!stats) return;
+
+            // Simple stats
+            if (document.getElementById('totalPasses')) {
+                document.getElementById('totalPasses').textContent = Object.values(stats.totals).reduce((a, b) => a + b, 0);
+                document.getElementById('totalGeral').textContent = stats.totals['G'] || 0;
+                document.getElementById('totalPref').textContent = stats.totals['P'] || 0;
+                document.getElementById('totalOuvidoria').textContent = stats.totals['O'] || 0;
+                
+                const waitMin = Math.round((stats.avg_wait_seconds || 0) / 60);
+                document.getElementById('avgWait').textContent = waitMin || '< 1';
+            }
+
+            // Hourly Chart (Line)
+            const canvasHourly = document.getElementById('hourlyChart');
+            if (canvasHourly) {
+                const hourLabels = Array.from({length: 24}, (_, i) => `${i.toString().padStart(2, '0')}:00`);
+                const hourlyData = hourLabels.map(h => stats.hourly[h.substring(0,2)] || 0);
+
+                if (hourlyChart) {
+                    hourlyChart.data.datasets[0].data = hourlyData;
+                    hourlyChart.update();
+                } else {
+                    const ctx = canvasHourly.getContext('2d');
+                    hourlyChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: hourLabels,
+                            datasets: [{
+                                label: 'Atendimentos',
+                                data: hourlyData,
+                                borderColor: '#2563eb',
+                                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 4,
+                                pointBackgroundColor: '#2563eb'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+                                x: { grid: { display: false } }
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Services Chart (Doughnut)
+            const canvasServices = document.getElementById('servicesChart');
+            if (canvasServices) {
+                const serviceLabels = stats.by_service ? Object.keys(stats.by_service) : [];
+                const serviceData = stats.by_service ? Object.values(stats.by_service) : [];
+                const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+
+                if (servicesChart) {
+                    servicesChart.data.labels = serviceLabels;
+                    servicesChart.data.datasets[0].data = serviceData;
+                    servicesChart.update();
+                } else {
+                    const ctxS = canvasServices.getContext('2d');
+                    servicesChart = new Chart(ctxS, {
+                        type: 'doughnut',
+                        data: {
+                            labels: serviceLabels,
+                            datasets: [{
+                                data: serviceData,
+                                backgroundColor: colors,
+                                borderWidth: 0,
+                                hoverOffset: 10
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 10, font: { size: 10 } } }
+                            },
+                            cutout: '70%'
+                        }
+                    });
+                }
+
+                // Custom Insight
+                const total = serviceData.reduce((a,b) => a+b, 0);
+                if (total > 0 && document.getElementById('dashboardTip')) {
+                    const maxVal = Math.max(...serviceData);
+                    const topService = serviceLabels[serviceData.indexOf(maxVal)];
+                    document.getElementById('dashboardTip').innerHTML = `A <strong>${topService}</strong> é a sala mais procurada hoje, concentrando ${Math.round((maxVal/total)*100)}% dos atendimentos.`;
+                }
+            }
+        }
+
+        // Queue & Calling (Restored and modernized)
+        async function updateQueueUI() {
+            const queue = await getQueueAPI();
+            const tbody = document.getElementById('pendingQueueBody');
+            const emptyMsg = document.getElementById('emptyQueueMsg');
+            if (!tbody) return;
+
+            if (queue && queue.length > 0) {
+                // Sort: P (Preferential) first, then by number
+                queue.sort((a, b) => {
+                    if (a.type === 'P' && b.type !== 'P') return -1;
+                    if (a.type !== 'P' && b.type === 'P') return 1;
+                    return a.number - b.number;
+                });
+
+                tbody.innerHTML = '';
+                emptyMsg.style.display = 'none';
+                queue.forEach(ticket => {
+                    const tr = document.createElement('tr');
+                    tr.className = ticket.type === 'P' ? 'row-priority' : '';
+                    tr.innerHTML = `
+                        <td class="col-pass">${formatPassword(ticket)}</td>
+                        <td><span class="label ${ticket.type === 'P' ? 'label-p' : 'label-g'}">${getTypeName(ticket.type)}</span></td>
+                        <td class="col-time">${new Date(ticket.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</td>
+                        <td><button class="mini-call" onclick="callNextTicket('${ticket.id}')">CHAMAR</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                tbody.innerHTML = '';
+                emptyMsg.style.display = 'block';
+            }
+        }
+
+        async function callNextTicket(ticketId) {
+            const guiche = document.getElementById('guicheSelect').value;
+            const ticket = await callTicketAPI(ticketId, guiche);
+            if (ticket) {
+                channel.postMessage({ action: 'NEW_PASSWORD', data: ticket });
+                updateQueueUI();
+                updateDashboard();
+                openForwardModal(ticketId);
+            }
+        }
+
+        function openForwardModal(ticketId) {
+            document.getElementById('forwardTicketId').value = ticketId;
+            document.getElementById('forwardForm').reset();
+            document.getElementById('forwardModal').style.display = 'flex';
+        }
+
+        async function repeatTriageCall() {
+            const ticketId = document.getElementById('forwardTicketId').value;
+            const guiche = document.getElementById('guicheSelect').value;
+            // We can just call the API again or emit the message if we have the data
+            // To be safe and update the timestamp, we call the call API again:
+            const ticket = await callTicketAPI(ticketId, guiche);
+            if (ticket) {
+                channel.postMessage({ action: 'NEW_PASSWORD', data: ticket });
+                showNotification("Chamada repetida com sucesso!");
+            }
+        }
+
+        function closeForwardModal() {
+            document.getElementById('forwardModal').style.display = 'none';
+        }
+
+        async function submitForward() {
+            const id = document.getElementById('forwardTicketId').value;
+            const data = {
+                name: document.getElementById('patientName').value,
+                cpf: document.getElementById('patientCPF').value,
+                birth: document.getElementById('patientBirth').value,
+                service: document.getElementById('destinationService').value
+            };
+
+            const res = await fetch(`/api/passwords/${id}/forward`, {
+                method: 'PATCH',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                closeForwardModal();
+                showNotification("Cidadão encaminhado com sucesso!");
+                updateQueueUI();
+            } else {
+                alert("Erro ao encaminhar cidadão.");
+            }
+        }
+
+        async function callNextAuto() {
+            let queue = await getQueueAPI();
+            if (queue.length > 0) {
+                // Sort: P (Preferential) first, then by number
+                queue.sort((a, b) => {
+                    if (a.type === 'P' && b.type !== 'P') return -1;
+                    if (a.type !== 'P' && b.type === 'P') return 1;
+                    return a.number - b.number;
+                });
+                callNextTicket(queue[0].id);
+            }
+        }
+
+        async function callNextGeneral() {
+            const queue = await getQueueAPI();
+            const general = queue.find(t => t.type === 'G');
+            if (general) callNextTicket(general.id);
+        }
+
+        function recallLast() {
+            getHistoryAPI().then(history => {
+                if (history.length > 0) channel.postMessage({ action: 'NEW_PASSWORD', data: history[0] });
+            });
+        }
+
+        // Counter Management
+        function updateCounterList() {
+            const state = getPasswordState();
+            const select = document.getElementById('guicheSelect');
+            const currentVal = localStorage.getItem('last_guiche');
+            select.innerHTML = '';
+            state.counters.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = `Guichê ${c}`;
+                if (c === currentVal) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+        function toggleAddCounter(show) { document.getElementById('guicheAddGroup').style.display = show ? 'block' : 'none'; }
+        function confirmAddCounter() {
+            const name = document.getElementById('newGuicheName').value.trim();
+            if (name) {
+                const state = getPasswordState();
+                if (!state.counters.includes(name)) {
+                    state.counters.push(name);
+                    savePasswordState(state);
+                    updateCounterList();
+                    localStorage.setItem('last_guiche', name);
+                    document.getElementById('guicheSelect').value = name;
+                }
+                document.getElementById('newGuicheName').value = '';
+                toggleAddCounter(false);
+            }
+        }
+        function saveGuichePreference() { localStorage.setItem('last_guiche', document.getElementById('guicheSelect').value); }
+
+        // Video Upload & Config
+        async function handleVideoUpload(input) {
+            if (!input.files || !input.files[0]) return;
+            const status = document.getElementById('uploadStatus');
+            status.textContent = "⏳ Enviando vídeo...";
+            status.style.color = "#003399";
+            
+            try {
+                const result = await apiUploadVideo(input.files[0]);
+                status.textContent = "✅ Upload concluído: " + result.filename;
+                status.style.color = "#10b981";
+                
+                // Add to playlist automatically
+                const settings = getMediaSettings();
+                if (!settings.playlist.includes(result.filename)) {
+                    settings.playlist.push(result.filename);
+                    saveMediaSettings(settings);
+                }
+            } catch (err) {
+                status.textContent = "❌ Erro: " + err.message;
+                status.style.color = "#ef4444";
+            }
+        }
+
+        function getMediaSettings() {
+            const saved = localStorage.getItem('media_settings');
+            return saved ? JSON.parse(saved) : { playlist: [], interval: 5, delay: 0 };
+        }
+
+        async function saveMediaSettings(customSettings) {
+            const settings = customSettings || {
+                playlist: getMediaSettings().playlist,
+                interval: parseInt(document.getElementById('videoInterval').value) || 5,
+                delay: parseInt(document.getElementById('videoDelay').value) || 0
+            };
+            
+            // 1. Save to Local Cache
+            localStorage.setItem('media_settings', JSON.stringify(settings));
+            
+            // 2. Save to Database
+            try {
+                await fetch('/api/config/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        video_playlist: JSON.stringify(settings.playlist),
+                        video_interval: settings.interval,
+                        video_delay: settings.delay
+                    })
+                });
+            } catch (e) {
+                console.error("Erro ao salvar configurações no banco:", e);
+            }
+
+            renderPlaylist(settings.playlist);
+            channel.postMessage({ action: 'MEDIA_SETTINGS_UPDATED', data: settings });
+        }
+
+        function loadMediaSettings() {
+            const settings = getMediaSettings();
+            document.getElementById('videoInterval').value = settings.interval || 5;
+            document.getElementById('videoDelay').value = settings.delay || 0;
+            renderPlaylist(settings.playlist || []);
+        }
+
+        function renderPlaylist(playlist) {
+            const list = document.getElementById('videoPlaylist');
+            if (playlist.length === 0) {
+                list.innerHTML = '<p style="color: #94a3b8; grid-column: 1/-1; text-align: center; padding: 2rem;">Nenhum vídeo na lista.</p>';
+                return;
+            }
+            list.innerHTML = playlist.map(file => `
+                <div class="video-card">
+                    <div class="video-icon"><i class="fas fa-film"></i></div>
+                    <div class="video-name">${file}</div>
+                    <button class="remove-video-btn" onclick="removeVideoFile('${file}')" title="Remover">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function removeVideoFile(filename) {
+            const settings = getMediaSettings();
+            settings.playlist = settings.playlist.filter(f => f !== filename);
+            saveMediaSettings(settings);
+        }
+
+        // Users Management
+        async function loadUsers() {
+            const users = await apiGetUsers();
+            const list = document.getElementById('usersList');
+            list.innerHTML = users.map(user => `
+                <div class="user-row">
+                    <div class="user-info">
+                        <span class="user-username">${user.username} ${user.id === currentUser.id ? '(Você)' : ''}</span>
+                        <span class="user-role">${user.role === 'admin' ? 'Administrador' : 'Operador'}</span>
+                    </div>
+                    ${user.id !== currentUser.id ? `<button class="delete-btn" onclick="deleteUser(${user.id})"><i class="fas fa-trash"></i></button>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function showAddUserModal() { document.getElementById('addUserForm').style.display = 'block'; }
+
+        async function saveNewUser() {
+            const username = document.getElementById('newUsername').value;
+            const password = document.getElementById('newUserPass').value;
+            const role = document.getElementById('newUserRole').value;
+            
+            try {
+                await apiCreateUser({ username, password, role });
+                document.getElementById('addUserForm').style.display = 'none';
+                loadUsers();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        async function deleteUser(id) {
+            if (confirm('Tem certeza que deseja excluir este usuário?')) {
+                await apiDeleteUser(id);
+                loadUsers();
+            }
+        }
+
+        async function resetSystem() {
+            if (confirm('Deseja zerar o sistema completamente? Isso não apagará o histórico do banco de dados, mas limpará as configurações locais.')) {
+                localStorage.clear();
+                window.location.reload();
+            }
+        }
+
+        // Real-time updates
+        channel.onmessage = (event) => {
+            if (event.data.action === 'TICKET_ISSUED') {
+                updateQueueUI();
+                updateDashboard();
+            }
+        };
+        function showNotification(message, type = 'success') {
+            let container = document.getElementById('notification-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'notification-container';
+                document.body.appendChild(container);
+            }
+            
+            const toast = document.createElement('div');
+            toast.className = `notification ${type}`;
+            toast.innerHTML = `
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+                <span>${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Trigger animation
+            setTimeout(() => toast.classList.add('active'), 10);
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                toast.classList.remove('active');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
